@@ -38,10 +38,11 @@ class NvgpuCompiler:
         ee = execution_engine.ExecutionEngine(
             module, opt_level=self.opt_level, shared_libs=self.shared_libs
         )
-        ee.initialize()
+        # ee.initialize()
         return ee
 
     def compile_and_jit(self, module: ir.Module) -> execution_engine.ExecutionEngine:
         """Compiles and jits the module."""
         self.compile(module)
+        module.operation.print()
         return self.jit(module)

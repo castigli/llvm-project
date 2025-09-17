@@ -37,12 +37,17 @@ def get_mlir_func_obj_ty(inputArgs):
     args = []
     c_int_p = ctypes.c_int * 1
     c_float_p = ctypes.c_float * 1
+    c_double_p = ctypes.c_double * 1
     c_bool_p = ctypes.c_bool * 1
     for arg in inputArgs:
         if isinstance(arg, bool):
             args.append(c_bool_p(arg))
         elif isinstance(arg, int):
             args.append(c_int_p(arg))
+        elif isinstance(arg, np.float64):
+            args.append(c_double_p(arg))
+        elif isinstance(arg, np.float32):
+            args.append(c_float_p(arg))
         elif isinstance(arg, float):
             args.append(c_float_p(arg))
         elif isinstance(arg, np.ndarray):
@@ -292,6 +297,10 @@ def get_mlir_ty(arg):
         return T.bool()
     elif isinstance(arg, int):
         return T.index()
+    elif isinstance(arg, np.float64):
+        return T.f64()
+    elif isinstance(arg, np.float32):
+        return T.f32()
     elif isinstance(arg, float):
         return T.f32()
     elif isinstance(arg, np.ndarray):
@@ -427,7 +436,7 @@ class NVDSL:
                         func.ReturnOp([])
 
                 # Save IR in a file
-                # saveIR(module)
+                saveIR(module)
 
                 # Verify the module
                 module.operation.verify()
