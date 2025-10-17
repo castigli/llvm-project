@@ -896,6 +896,9 @@ std::pair<mlir::Type, unsigned> NVVM::inferMMAType(NVVM::MMATypes type,
   } else if (type == NVVM::MMATypes::f32) {
     elementType = builder.getF32Type();
     numberElements = 8;
+  } else if (type == NVVM::MMATypes::f64) {
+    elementType = builder.getF64Type();
+    numberElements = 8;
   } else if (type == NVVM::MMATypes::tf32) {
     elementType = builder.getI32Type();
     numberElements = 4;

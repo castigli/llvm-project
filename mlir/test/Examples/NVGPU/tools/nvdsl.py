@@ -37,12 +37,17 @@ def get_mlir_func_obj_ty(inputArgs):
     args = []
     c_int_p = ctypes.c_int * 1
     c_float_p = ctypes.c_float * 1
+    c_double_p = ctypes.c_double * 1
     c_bool_p = ctypes.c_bool * 1
     for arg in inputArgs:
         if isinstance(arg, bool):
             args.append(c_bool_p(arg))
         elif isinstance(arg, int):
             args.append(c_int_p(arg))
+        elif isinstance(arg, np.float32):
+            args.append(c_float_p(arg))
+        elif isinstance(arg, np.float64):
+            args.append(c_double_p(arg))
         elif isinstance(arg, float):
             args.append(c_float_p(arg))
         elif isinstance(arg, np.ndarray):
@@ -50,6 +55,7 @@ def get_mlir_func_obj_ty(inputArgs):
                 ctypes.pointer(ctypes.pointer(rt.get_ranked_memref_descriptor(arg)))
             )
         else:
+            breakpoint()
             raise NotImplementedError(arg)
     return args
 
@@ -293,6 +299,12 @@ def get_mlir_ty(arg):
         return T.bool()
     elif isinstance(arg, int):
         return T.index()
+    elif isinstance(arg, np.float16):
+        return T.f16()
+    elif isinstance(arg, np.float32):
+        return T.f32()
+    elif isinstance(arg, np.float64):
+        return T.f64()
     elif isinstance(arg, float):
         return T.f32()
     elif isinstance(arg, np.ndarray):
@@ -357,6 +369,8 @@ class NVDSL:
                     ) and arith._is_integer_like_type(lhs.type):
                         if op == "Div" or op == "Rem":
                             op += "U"
+                        if op == "FloorDiv":
+                            op += "S"
                         op += "I"
                         if op.startswith("Cmp"):
                             predicateAttr = getattr(arith, f"CmpIPredicate").__dict__[
@@ -390,6 +404,7 @@ class NVDSL:
                     __sub__ = partialmethod(_binary_op, op="Sub")
                     __mul__ = partialmethod(_binary_op, op="Mul")
                     __truediv__ = partialmethod(_binary_op, op="Div")
+                    __floordiv__ = partialmethod(_binary_op, op="FloorDiv")
                     __mod__ = partialmethod(_binary_op, op="Rem")
                     __xor__ = partialmethod(_binary_op, op="XOr")
                     __lt__ = partialmethod(_binary_op, op="Cmp", predAtt="ult")

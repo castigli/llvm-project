@@ -20,7 +20,7 @@ class NvgpuCompiler:
     """Nvgpu class for compiling and building MLIR modules."""
 
     def __init__(self, options: str, opt_level: int, shared_libs: Sequence[str]):
-        pipeline = f"builtin.module(gpu-lower-to-nvvm-pipeline{{{options}}})"
+        pipeline = f"builtin.module(convert-vector-to-llvm, gpu-lower-to-nvvm-pipeline{{{options}}})"
         self.pipeline = pipeline
         self.shared_libs = shared_libs
         self.opt_level = opt_level

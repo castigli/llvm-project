@@ -57,7 +57,8 @@ static NVVM::MMATypes getElementType(gpu::MMAMatrixType type) {
   if (type.getElementType().isF32())
     return type.getOperand() == "COp" ? NVVM::MMATypes::f32
                                       : NVVM::MMATypes::tf32;
-
+  if (type.getElementType().isF64())
+    return NVVM::MMATypes::f64;
   if (type.getElementType().isSignedInteger(8))
     return NVVM::MMATypes::s8;
   if (type.getElementType().isUnsignedInteger(8))
