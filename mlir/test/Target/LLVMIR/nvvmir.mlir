@@ -463,6 +463,16 @@ llvm.func @nvvm_wmma_mma(%0 : i32, %1 : i32, %2 : i32, %3 : i32, %4 : i32, %5 : 
   llvm.return
 }
 
+// CHECK-LABEL: @nvvm_wmma_mma_f64
+llvm.func @nvvm_wmma_mma_f64(%0 : f64, %1 : f64, %2 : f64, %3 : f64) {
+  // CHECK: { double, double } @llvm.nvvm.wmma.mm8n8k4.mma.row.col.f64(f64 %{{.*}}, f64 %{{.*}}, f64 %{{.*}}, f64 %{{.*}})
+  %r = nvvm.wmma.mma %0, %1, %2, %3
+    {eltypeA = #nvvm.mma_type<f64>, eltypeB = #nvvm.mma_type<f64>, k = 4 : i32, layoutA = #nvvm.mma_layout<row>, layoutB = #nvvm.mma_layout<col>, m = 8 : i32, n = 8 : i32}
+    : (f64, f64, f64, f64)
+    -> !llvm.struct<(f64, f64)>
+  llvm.return
+}
+
 // CHECK-LABEL: @cp_async
 llvm.func @cp_async(%arg0: !llvm.ptr<3>, %arg1: !llvm.ptr<1>) {
   // CHECK: call void @llvm.nvvm.cp.async.ca.shared.global.4(ptr addrspace(3) %{{.*}}, ptr addrspace(1) %{{.*}})

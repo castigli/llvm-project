@@ -898,7 +898,10 @@ std::pair<mlir::Type, unsigned> NVVM::inferMMAType(NVVM::MMATypes type,
     numberElements = 8;
   } else if (type == NVVM::MMATypes::f64) {
     elementType = builder.getF64Type();
-    numberElements = 8;
+    if (frag == NVVM::MMAFrag::a || frag == NVVM::MMAFrag::b)
+      numberElements = 1;
+    else
+      numberElements = 2;
   } else if (type == NVVM::MMATypes::tf32) {
     elementType = builder.getI32Type();
     numberElements = 4;
