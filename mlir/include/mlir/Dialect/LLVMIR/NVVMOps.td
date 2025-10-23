@@ -2361,7 +2361,7 @@ def MMAFragAttr : EnumAttr<NVVM_Dialect, MMAFrag, "mma_frag"> {
 }
 
 def NVVM_WMMALoadOp: NVVM_Op<"wmma.load">,
-  Results<(outs LLVM_AnyStruct:$res)>,
+  Results<(outs AnyTypeOf<[LLVM_AnyStruct, F64]>:$res)>,
   Arguments<(ins LLVM_AnyPointer: $ptr, I32: $stride, I32Attr:$m,
              I32Attr:$n, I32Attr:$k, MMALayoutAttr:$layout,
              MMATypesAttr:$eltype, MMAFragAttr:$frag)> {
