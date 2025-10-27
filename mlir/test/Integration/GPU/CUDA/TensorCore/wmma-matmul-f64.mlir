@@ -15,7 +15,6 @@ func.func @main() {
   %d = memref.alloc() : memref<8x8xf64>
 
   %f1 = arith.constant 1.0e+00 : f64
-  %f0 = arith.constant 0.0e+00 : f64
   %fcst = arith.constant 3.14e+00 : f64
   %c0 = arith.constant 0 : index
   %c8 = arith.constant 8 : index
@@ -34,13 +33,13 @@ func.func @main() {
   scf.for %arg0 = %c0 to %c8 step %c1 {
     scf.for %arg1 = %c0 to %c8 step %c1 {
       memref.store %fcst, %c[%arg0, %arg1] : memref<8x8xf64>
-      memref.store %f0, %d[%arg0, %arg1] : memref<8x8xf64>
     }
   }
 
   %2 = memref.cast %a : memref<8x4xf64> to memref<*xf64>
   %20 = memref.cast %b : memref<4x8xf64> to memref<*xf64>
   %33 = memref.cast %c : memref<8x8xf64> to memref<*xf64>
+  %34 = memref.cast %d : memref<8x8xf64> to memref<*xf64>
 
   gpu.host_register %2 : memref<*xf64>
   gpu.host_register %20 : memref<*xf64>
@@ -58,15 +57,15 @@ func.func @main() {
     gpu.terminator
   }
   // Print the memref after computation.
-  call @printMemrefF64(%33) : (memref<*xf64>) -> ()
-  // CHECK: [4,   4,   4,   4,   4,   4,   4,   4],
-  // CHECK-NEXT: [4,   4,   4,   4,   4,   4,   4,   4],
-  // CHECK-NEXT: [4,   4,   4,   4,   4,   4,   4,   4],
-  // CHECK-NEXT: [4,   4,   4,   4,   4,   4,   4,   4],
-  // CHECK-NEXT: [4,   4,   4,   4,   4,   4,   4,   4],
-  // CHECK-NEXT: [4,   4,   4,   4,   4,   4,   4,   4],
-  // CHECK-NEXT: [4,   4,   4,   4,   4,   4,   4,   4],
-  // CHECK-NEXT: [4,   4,   4,   4,   4,   4,   4,   4]
+  call @printMemrefF64(%34) : (memref<*xf64>) -> ()
+  // CHECK: [7.14,   7.14,   7.14,   7.14,   7.14,   7.14,   7.14,   7.14],
+  // CHECK-NEXT: [7.14,   7.14,   7.14,   7.14,   7.14,   7.14,   7.14,   7.14],
+  // CHECK-NEXT: [7.14,   7.14,   7.14,   7.14,   7.14,   7.14,   7.14,   7.14],
+  // CHECK-NEXT: [7.14,   7.14,   7.14,   7.14,   7.14,   7.14,   7.14,   7.14],
+  // CHECK-NEXT: [7.14,   7.14,   7.14,   7.14,   7.14,   7.14,   7.14,   7.14],
+  // CHECK-NEXT: [7.14,   7.14,   7.14,   7.14,   7.14,   7.14,   7.14,   7.14],
+  // CHECK-NEXT: [7.14,   7.14,   7.14,   7.14,   7.14,   7.14,   7.14,   7.14],
+  // CHECK-NEXT: [7.14,   7.14,   7.14,   7.14,   7.14,   7.14,   7.14,   7.14]
   return
 }
 
