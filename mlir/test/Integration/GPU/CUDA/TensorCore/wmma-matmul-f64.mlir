@@ -6,13 +6,17 @@
 // RUN:   --entry-point-result=void \
 // RUN: | FileCheck %s
 
+#map0 = affine_map<(d0, d1) -> (d1, d0)>
+
 func.func @main() {
   %a = memref.alloc() : memref<8x4xf64>
   %b = memref.alloc() : memref<4x8xf64>
   %c = memref.alloc() : memref<8x8xf64>
+  %d = memref.alloc() : memref<8x8xf64>
 
   %f1 = arith.constant 1.0e+00 : f64
   %f0 = arith.constant 0.0e+00 : f64
+  %fcst = arith.constant 3.14e+00 : f64
   %c0 = arith.constant 0 : index
   %c8 = arith.constant 8 : index
   %c4 = arith.constant 4 : index
@@ -29,7 +33,8 @@ func.func @main() {
   // Initialize the accumulator matrix with zeros.
   scf.for %arg0 = %c0 to %c8 step %c1 {
     scf.for %arg1 = %c0 to %c8 step %c1 {
-      memref.store %f0, %c[%arg0, %arg1] : memref<8x8xf64>
+      memref.store %fcst, %c[%arg0, %arg1] : memref<8x8xf64>
+      memref.store %f0, %d[%arg0, %arg1] : memref<8x8xf64>
     }
   }
 
@@ -43,13 +48,13 @@ func.func @main() {
 
   gpu.launch blocks(%bx, %by, %bz) in (%grid_x = %c1, %grid_y = %c1, %grid_z = %c1)
              threads(%tx, %ty, %tz) in (%block_x = %c32, %block_y = %c1, %block_z = %c1) {
-    %A = gpu.subgroup_mma_load_matrix %a[%c0, %c0] {leadDimension = 8 : index} : memref<8x4xf64> -> !gpu.mma_matrix<8x4xf64, "AOp">
-    %B = gpu.subgroup_mma_load_matrix %b[%c0, %c0] {leadDimension = 4 : index} : memref<4x8xf64> -> !gpu.mma_matrix<4x8xf64, "BOp">
+    %A = gpu.subgroup_mma_load_matrix %a[%c0, %c0] {leadDimension = 4 : index} : memref<8x4xf64> -> !gpu.mma_matrix<8x4xf64, "AOp">
+    %B = gpu.subgroup_mma_load_matrix %b[%c0, %c0] {leadDimension = 8 : index} : memref<4x8xf64> -> !gpu.mma_matrix<4x8xf64, "BOp">
     %C = gpu.subgroup_mma_load_matrix %c[%c0, %c0] {leadDimension = 8 : index} : memref<8x8xf64> -> !gpu.mma_matrix<8x8xf64, "COp">
 
     %R = gpu.subgroup_mma_compute %A, %B, %C : !gpu.mma_matrix<8x4xf64, "AOp">, !gpu.mma_matrix<4x8xf64, "BOp"> -> !gpu.mma_matrix<8x8xf64, "COp">
 
-    gpu.subgroup_mma_store_matrix %R, %c[%c0, %c0] {leadDimension = 8 : index}: !gpu.mma_matrix<8x8xf64, "COp">, memref<8x8xf64>
+    gpu.subgroup_mma_store_matrix %R, %d[%c0, %c0] {leadDimension = 8 : index}: !gpu.mma_matrix<8x8xf64, "COp">, memref<8x8xf64>
     gpu.terminator
   }
   // Print the memref after computation.
