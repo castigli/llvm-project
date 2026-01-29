@@ -9,6 +9,7 @@
 #include "mlir/Dialect/Linalg/IR/Linalg.h"
 #include "mlir/Dialect/Linalg/Passes.h"
 #include "mlir/Dialect/Linalg/Transforms/Transforms.h"
+#include "mlir/Dialect/Tensor/IR/Tensor.h"
 #include "mlir/IR/PatternMatch.h"
 #include "mlir/Transforms/GreedyPatternRewriteDriver.h"
 #include "llvm/ADT/SmallVector.h"
@@ -21,40 +22,39 @@ namespace mlir {
 using namespace mlir;
 using namespace mlir::linalg;
 
-#define DEBUG_TYPE "linalg-fold-into-elementwise"
+#define DEBUG_TYPE "linalg-fold-transpose-into-extract-insert-slice-pair"
 
 namespace {
-struct FoldTransposeExractInsertSlice : public OpRewritePattern<ElementwiseOp> {
-  using OpRewritePattern<ElementwiseOp>::OpRewritePattern;
+struct FoldTransposeExractInsertSlice : public OpRewritePattern<tensor::ExtractSliceOp> {
+  using OpRewritePattern<tensor::ExtractSliceOp>::OpRewritePattern;
 
-  LogicalResult matchAndRewrite(ElementwiseOp op,
+  LogicalResult matchAndRewrite(tensor::ExtractSliceOp op,
                                 PatternRewriter &rewriter) const override {
-    bool changed = false;
-    SmallVector<Value> newIns;
-    SmallVector<AffineMap> newMaps;
-    for (OpOperand *operand : op.getDpsInputOperands()) {
-      AffineMap map = op.getMatchingIndexingMap(operand);
-      auto transposeOp = operand->get().getDefiningOp<TransposeOp>();
 
-      if (!map.isIdentity() || !transposeOp) {
-        // push in original operand and its map.
-        newIns.push_back(operand->get());
-        newMaps.push_back(map);
-        continue;
-      }
-      newIns.push_back(transposeOp.getInput());
-      // push in transposeOp's inverse permutation map.
-      newMaps.push_back(transposeOp.getMatchingIndexingMap(
-          transposeOp.getDpsInputOperand(0)));
-      changed = true;
-    }
-    if (!changed)
+    // check if the operand is defined by a transpose
+    auto transposeOp = op.getSource().getDefiningOp<TransposeOp>();
+    if (!transposeOp)
       return failure();
-    newMaps.push_back(op.getIndexingMapsArray().back());
 
-    rewriter.replaceOpWithNewOp<ElementwiseOp>(
-        op, newIns, op.getDpsInits()[0], op.getKindAttr(),
-        rewriter.getAffineMapArrayAttr(newMaps));
+    // check if user is unique and is a collapse shape op
+    auto collapseShapeOp = dyn_cast<tensor::CollapseShapeOp>(*op.getResult().getUsers().begin());
+    if (!collapseShapeOp || !collapseShapeOp->hasOneUse())
+      return failure();
+
+    // check that there are only elementwise ops between collapse shape and broadcast
+
+
+    // check that collapse shape and broadcast are inverses
+
+
+    // move transpose before user of insert slice (or yield)
+
+    llvm::errs() << "FoldTransposeExractInsertSlice::matchAndRewrite\n" 
+      << op << "\n";
+
+    // rewriter.replaceOpWithNewOp<tensor::ExtractSliceOp>(
+    //     op, newIns, op.getDpsInits()[0], op.getKindAttr(),
+    //     rewriter.getAffineMapArrayAttr(newMaps));
     return success();
   }
 };
