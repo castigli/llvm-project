@@ -15,6 +15,7 @@ add_mlir_dialect_library(MLIRLinalgTransforms
   EraseUnusedOperandsAndResults.cpp
   FoldAddIntoDest.cpp
   FoldIntoElementwise.cpp
+  FoldTransposeIntoExtractInsertSlicePair.cpp
   FusePadOpWithLinalgProducer.cpp
   Fusion.cpp
   Generalization.cpp

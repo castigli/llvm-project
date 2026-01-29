@@ -274,4 +274,17 @@ def LinalgBlockPackMatmul : Pass<"linalg-block-pack-matmul"> {
   ];
 }
 
+def LinalgFoldTransposeIntoExtractInsertSlicePairPass 
+    : Pass<"linalg-fold-transpose-into-extract-insert-slice-pair"> {
+  let summary = "Fold transpose ops into extract/insert slice ops";
+  let description = [{
+    Fold transpose ops that feed extract_slice/insert_slice ops into the
+    extract/insert slice ops by updating their indexing maps. `linalg.transpose`
+    producers whose consumer indexing map is the identity are absorbed, turning
+    the permutation into the extract/insert slice map itself. Other operands
+    remain untouched.
+  }];
+  let dependentDialects = ["linalg::LinalgDialect", "tensor::TensorDialect"];
+}
+
 #endif // MLIR_DIALECT_LINALG_PASSES

@@ -2165,6 +2165,10 @@ void populateFoldPackUnpackIntoTensorEmptyPatterns(RewritePatternSet &patterns);
 /// `tensor.unpack` operations.
 void populateSimplifyPackAndUnpackPatterns(RewritePatternSet &patterns);
 
+/// Linalg fold transpose with extract/insert slice pair patterns
+void populateLinalgFoldTransposeIntoExtractInsertSlicePairPatterns(
+    RewritePatternSet &patterns);
+
 } // namespace linalg
 } // namespace mlir
 
