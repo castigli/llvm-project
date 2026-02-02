@@ -16,7 +16,8 @@ module {
       %extracted_slice = tensor.extract_slice %transposed[%4, 0] [1, 10] [1, 1] : tensor<10x10xf32> to tensor<1x10xf32>
       %collapsed = tensor.collapse_shape %extracted_slice [[0, 1]] : tensor<1x10xf32> into tensor<10xf32>
       %5 = tensor.empty() : tensor<10xf32>
-      %6 = linalg.add ins(%arg2, %collapsed : tensor<10xf32>, tensor<10xf32>) outs(%5 : tensor<10xf32>) -> tensor<10xf32>
+      // %6 = linalg.add ins(%arg2, %collapsed : tensor<10xf32>, tensor<10xf32>) outs(%5 : tensor<10xf32>) -> tensor<10xf32>
+      %6 = linalg.elementwise kind=#linalg.elementwise_kind<add> ins(%arg2, %collapsed : tensor<10xf32>, tensor<10xf32>) outs(%5 : tensor<10xf32>) -> tensor<10xf32>
       %7 = tensor.empty() : tensor<1x10xf32>
       %broadcasted = linalg.broadcast ins(%arg2 : tensor<10xf32>) outs(%7 : tensor<1x10xf32>) dimensions = [0] 
       %inserted_slice = tensor.insert_slice %broadcasted into %arg3[%4, 0] [1, 10] [1, 1] : tensor<1x10xf32> into tensor<10x10xf32>
