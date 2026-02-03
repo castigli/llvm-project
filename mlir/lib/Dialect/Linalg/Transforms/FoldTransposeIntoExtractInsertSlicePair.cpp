@@ -13,6 +13,7 @@
 #include "mlir/IR/PatternMatch.h"
 #include "mlir/Transforms/GreedyPatternRewriteDriver.h"
 #include "llvm/ADT/SmallVector.h"
+#include "llvm/Support/DebugLog.h"
 
 namespace mlir {
 #define GEN_PASS_DEF_LINALGFOLDTRANSPOSEINTOEXTRACTINSERTSLICEPAIRPASS
@@ -31,13 +32,13 @@ struct FoldTransposeExractInsertSlice : public OpRewritePattern<tensor::ExtractS
   LogicalResult matchAndRewrite(tensor::ExtractSliceOp op,
                                 PatternRewriter &rewriter) const override {
 
-    llvm::dbgs() << "FoldTransposeExractInsertSlice::matchAndRewrite\n" 
+    LDBG() << "FoldTransposeExractInsertSlice::matchAndRewrite\n" 
       << op << "\n";
 
     // check if the operand is defined by a transpose
     auto transposeOp = op.getSource().getDefiningOp<TransposeOp>();
     if (!transposeOp) {
-      llvm::dbgs() << "Extract slice source is not defined by transpose\n";
+      LDBG() << "Extract slice source is not defined by transpose\n";
       return failure();
     }
 
@@ -60,7 +61,7 @@ struct FoldTransposeExractInsertSlice : public OpRewritePattern<tensor::ExtractS
     if (insertSliceOp.getOffsets() != op.getOffsets() ||
         insertSliceOp.getSizes() != op.getSizes() ||
         insertSliceOp.getStrides() != op.getStrides()) {
-      llvm::dbgs() << "Insert slice and extract slice not symmetric\n";
+      LDBG() << "Insert slice and extract slice not symmetric\n";
       return failure();
     }
     // exchange order of offsets and sizes according to transpose permutation
@@ -97,28 +98,57 @@ struct FoldTransposeExractInsertSlice : public OpRewritePattern<tensor::ExtractS
     }
 
     // get result type of new extract slice
-    Type resultType = tensor::ExtractSliceOp::inferResultType(
+    Type sliceTy = tensor::ExtractSliceOp::inferResultType(
       op.getSource().getType(), newStaticSizes);
-    llvm::dbgs() << "Inferred result type: " << resultType << "\n";
+    LDBG() << "Inferred result type: " << sliceTy << "\n";
     // create new extract slice with updated offsets and sizes
     // with same operand as current op
     auto newExtractOp = rewriter.create<tensor::ExtractSliceOp>(
-      op.getLoc(), resultType, op.getSource(), newOffsets, newSizes, newStrides,
+      op.getLoc(), sliceTy, op.getSource(), newOffsets, newSizes, newStrides,
       newStaticOffsets, newStaticSizes, newStaticStrides);
 
-    // TODO replace broadcast and insert slice with new ones
+    // to keep IR looking nice, we update the insertion point to be after
+    // the insert slice op
+    rewriter.setInsertionPointAfter(insertSliceOp);
 
-    // move transpose after scf.for
+    // get dimensions for new broadcast op
+    Value insertSliceSource = insertSliceOp.getSource();
+    auto broadcastOp = insertSliceSource.getDefiningOp<BroadcastOp>();
+    if (!broadcastOp) {
+      LDBG() << "Insert slice source is not defined by broadcast\n";
+      return failure();
+    }
+    SmallVector<int64_t, 4> broadcastDims;
+    for (auto dim : broadcastOp.getDimensions()) {
+      broadcastDims.push_back(permutation[dim]);
+    }
+    auto newBroadcastInitOp = rewriter.create<tensor::EmptyOp>(
+      broadcastOp.getLoc(), newExtractOp.getType().getShape(),
+      newExtractOp.getType().getElementType());
+    LDBG() << "Created new empty op for broadcast init: " 
+      << newBroadcastInitOp << "\n";
+    // create new broadcast op with updated dimensions
+    auto newBroadcastOp = rewriter.create<BroadcastOp>(
+      broadcastOp.getLoc(), broadcastOp.getInput(), newBroadcastInitOp, broadcastDims);
+    LDBG() << "Created new broadcast op: " << newBroadcastOp << "\n";
+
+
+    // create new insert slice with updated offsets and sizes
+    auto newInsertOp = rewriter.create<tensor::InsertSliceOp>(
+      insertSliceOp.getLoc(), newBroadcastOp.getResult()[0], insertSliceOp.getDest(), newOffsets, 
+      newSizes, newStrides, newStaticOffsets, newStaticSizes, newStaticStrides);
+    LDBG() << "Created new insert slice op: " << newInsertOp << "\n";
+    // replace uses of insert slice with new insert slice
+    rewriter.replaceAllUsesWith(insertSliceOp, newInsertOp);
+
+    // move transpose after scan (i.e. scf.for)
     // replaces uses of transpose with the input of transpose
-    Value transposeInput = transposeOp.getInput();
-    Value transposeInit = transposeOp.getInit();
-    Value transposeOutput = transposeOp->getOpResult(0);
-    rewriter.replaceAllUsesWith(transposeOutput, transposeInput);
+    rewriter.replaceAllUsesWith(transposeOp->getOpResult(0), transposeOp.getInput());
     // insert new transpose after the scf.for
     rewriter.setInsertionPointAfter(parentOp);
     Value scanResult = parentOp->getResult(1);
     auto newTransposeOp = rewriter.create<TransposeOp>(parentOp->getLoc(), 
-      scanResult, transposeInit, transposeOp.getPermutation());
+      scanResult, transposeOp.getInit(), transposeOp.getPermutation());
     // replace uses of scan result with the new transpose
     rewriter.replaceAllUsesExcept(scanResult, newTransposeOp->getOpResult(0), newTransposeOp);
 
