@@ -52,6 +52,25 @@ struct FoldTransposeExractInsertSlice : public OpRewritePattern<tensor::ExtractS
     auto scfForOp = dyn_cast<scf::ForOp>(parentOp);
     if (!scfForOp)
       return failure();
+
+    // update scan init operand
+    auto scanInit = scfForOp.getInitArgs()[1];
+    auto scanInitOp = scanInit.getDefiningOp();
+    rewriter.setInsertionPoint(scanInitOp);
+    
+    auto shapedTy = dyn_cast<ShapedType>(transposeOp.getInput().getType());
+    auto staticShape = shapedTy.getShape();
+    auto elementType = shapedTy.getElementType();
+    auto newScanInit = rewriter.create<tensor::EmptyOp>(scanInitOp->getLoc(), staticShape, elementType);
+    rewriter.replaceAllUsesWith(scanInit, newScanInit);
+
+    // iter arg type for scan needs to be transposed
+    auto secondIterArg = scfForOp.getRegionIterArg(1);
+    secondIterArg.setType(newScanInit.getType());
+    // update result type of scf.for
+    scfForOp.getResult(1).setType(newScanInit.getType());
+
+
     auto yieldOp = dyn_cast<scf::YieldOp>(*(scfForOp.getBody()->getTerminator()));
     // second argument of yield should be result of insert slice
     auto insertSliceOp = yieldOp.getOperand(1).getDefiningOp<tensor::InsertSliceOp>();
@@ -103,6 +122,7 @@ struct FoldTransposeExractInsertSlice : public OpRewritePattern<tensor::ExtractS
     LDBG() << "Inferred result type: " << sliceTy << "\n";
     // create new extract slice with updated offsets and sizes
     // with same operand as current op
+    rewriter.setInsertionPoint(op);
     auto newExtractOp = rewriter.create<tensor::ExtractSliceOp>(
       op.getLoc(), sliceTy, op.getSource(), newOffsets, newSizes, newStrides,
       newStaticOffsets, newStaticSizes, newStaticStrides);
@@ -152,6 +172,7 @@ struct FoldTransposeExractInsertSlice : public OpRewritePattern<tensor::ExtractS
     // replace uses of scan result with the new transpose
     rewriter.replaceAllUsesExcept(scanResult, newTransposeOp->getOpResult(0), newTransposeOp);
 
+    // finally replace extract slice with new extract slice
     rewriter.replaceOp(op, newExtractOp);
     return success();
   }
