@@ -284,7 +284,8 @@ def LinalgFoldTransposeIntoExtractInsertSlicePairPass
     the permutation into the extract/insert slice map itself. Other operands
     remain untouched.
   }];
-  let dependentDialects = ["linalg::LinalgDialect", "tensor::TensorDialect"];
+  let dependentDialects = ["linalg::LinalgDialect", "tensor::TensorDialect", 
+    "scf::SCFDialect"];
 }
 
 #endif // MLIR_DIALECT_LINALG_PASSES
