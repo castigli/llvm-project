@@ -58,7 +58,8 @@ struct FoldTransposeExractInsertSlice : public OpRewritePattern<tensor::ExtractS
     auto shapedTy = dyn_cast<ShapedType>(transposeOp.getInput().getType());
     auto staticShape = shapedTy.getShape();
     auto elementType = shapedTy.getElementType();
-    auto newScanInit = rewriter.create<tensor::EmptyOp>(scanInitOp->getLoc(), staticShape, elementType);
+    auto newScanInit = rewriter.create<arith::ConstantOp>(scanInitOp->getLoc(), rewriter.getZeroAttr(shapedTy));
+    // auto newScanInit = rewriter.create<tensor::EmptyOp>(scanInitOp->getLoc(), staticShape, elementType);
     rewriter.replaceAllUsesWith(scanInit, newScanInit);
 
     // iter arg type for scan needs to be transposed

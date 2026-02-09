@@ -3,6 +3,8 @@
 // CHECK-LABEL: func.func @transpose_scan(
 // CHECK-SAME:                            %[[IN:.*]]: tensor<10x5xf32>) -> tensor<10x5xf32> {
 // CHECK-NOT: linalg.transpose
+// CHECK: %[[ZERO:.*]] = arith.constant dense<0.000000e+00> : tensor<10x5xf32>
+// CHECK: %{{.*}} = scf.for %arg1 = %{{.*}} to %{{.*}} step %{{.*}} iter_args(%arg2 = %{{.*}}, %arg3 = %[[ZERO]]) -> (tensor<10xf32>, tensor<10x5xf32>)  : i32 {
 // CHECK: %{{.*}} = tensor.extract_slice %[[IN]][0, %[[INDEX:.*]]] [10, 1] [1, 1] : tensor<10x5xf32> to tensor<10x1xf32> 
 // CHECK: %{{.*}} = tensor.insert_slice %{{.*}} into %{{.*}}[0, %[[INDEX]]] [10, 1] [1, 1] : tensor<10x1xf32> into tensor<10x5xf32>
 // CHECK: %[[TRANSPOSED_0:.*]] = linalg.transpose ins(%{{.*}} : tensor<10x5xf32>) outs(%{{.*}} : tensor<5x10xf32>) permutation = [1, 0]
