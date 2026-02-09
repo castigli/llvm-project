@@ -42,16 +42,13 @@ struct FoldTransposeExractInsertSlice : public OpRewritePattern<tensor::ExtractS
       return failure();
     }
 
-    // check if user is unique and is a collapse shape op
-    auto collapseShapeOp = dyn_cast<tensor::CollapseShapeOp>(*op.getResult().getUsers().begin());
-    if (!collapseShapeOp || !collapseShapeOp->hasOneUse())
-      return failure();
-
     // find insert slice op from yield
     Operation* parentOp = op->getParentOp();
     auto scfForOp = dyn_cast<scf::ForOp>(parentOp);
-    if (!scfForOp)
+    if (!scfForOp) {
+      LDBG() << "Parent op is not scf.for\n";
       return failure();
+    }
 
     // update scan init operand
     auto scanInit = scfForOp.getInitArgs()[1];
@@ -71,11 +68,14 @@ struct FoldTransposeExractInsertSlice : public OpRewritePattern<tensor::ExtractS
     scfForOp.getResult(1).setType(newScanInit.getType());
 
 
+    // second argument of yield should be result of insert slice
     auto yieldOp = dyn_cast<scf::YieldOp>(*(scfForOp.getBody()->getTerminator()));
     // second argument of yield should be result of insert slice
     auto insertSliceOp = yieldOp.getOperand(1).getDefiningOp<tensor::InsertSliceOp>();
-    if (!insertSliceOp)
+    if (!insertSliceOp) {
+      LDBG() << "Second operand of yield is not defined by insert slice\n";
       return failure();
+    }
     // check that the insert slice is symmetric to the extract slice
     if (insertSliceOp.getOffsets() != op.getOffsets() ||
         insertSliceOp.getSizes() != op.getSizes() ||
@@ -116,8 +116,13 @@ struct FoldTransposeExractInsertSlice : public OpRewritePattern<tensor::ExtractS
       newStaticStrides.push_back(op.getStaticStrides()[perm]);  
     }
 
+
     // get result type of new extract slice
-    Type sliceTy = tensor::ExtractSliceOp::inferResultType(
+    RankedTensorType curExractOpTy = 
+      dyn_cast<RankedTensorType>(op.getResult().getType());
+    unsigned sliceRank = curExractOpTy.getRank();
+
+    Type sliceTy = tensor::ExtractSliceOp::inferCanonicalRankReducedResultType(sliceRank,
       op.getSource().getType(), newStaticSizes);
     LDBG() << "Inferred result type: " << sliceTy << "\n";
     // create new extract slice with updated offsets and sizes
@@ -131,31 +136,38 @@ struct FoldTransposeExractInsertSlice : public OpRewritePattern<tensor::ExtractS
     // the insert slice op
     rewriter.setInsertionPointAfter(insertSliceOp);
 
-    // get dimensions for new broadcast op
+    // Get source for new insert slice
+    Value newInsertSliceSource;
     Value insertSliceSource = insertSliceOp.getSource();
     auto broadcastOp = insertSliceSource.getDefiningOp<BroadcastOp>();
     if (!broadcastOp) {
       LDBG() << "Insert slice source is not defined by broadcast\n";
-      return failure();
+      newInsertSliceSource = insertSliceSource;
     }
-    SmallVector<int64_t, 4> broadcastDims;
-    for (auto dim : broadcastOp.getDimensions()) {
-      broadcastDims.push_back(permutation[dim]);
+    else {
+      // if the source is defined by a broadcast, we need to update the
+      // broadcast dimensions according to the transpose permutation
+      LDBG() << "Insert slice source is defined by broadcast\n";
+      // get dimensions for new broadcast op
+      SmallVector<int64_t, 4> broadcastDims;
+      for (auto dim : broadcastOp.getDimensions()) {
+        broadcastDims.push_back(permutation[dim]);
+      }
+      auto newBroadcastInitOp = rewriter.create<tensor::EmptyOp>(
+        broadcastOp.getLoc(), newExtractOp.getType().getShape(),
+        newExtractOp.getType().getElementType());
+      LDBG() << "Created new empty op for broadcast init: " 
+        << newBroadcastInitOp << "\n";
+      // create new broadcast op with updated dimensions
+      auto newBroadcastOp = rewriter.create<BroadcastOp>(
+        broadcastOp.getLoc(), broadcastOp.getInput(), newBroadcastInitOp, broadcastDims);
+      LDBG() << "Created new broadcast op: " << newBroadcastOp << "\n";
+      newInsertSliceSource = newBroadcastOp.getResult()[0];
     }
-    auto newBroadcastInitOp = rewriter.create<tensor::EmptyOp>(
-      broadcastOp.getLoc(), newExtractOp.getType().getShape(),
-      newExtractOp.getType().getElementType());
-    LDBG() << "Created new empty op for broadcast init: " 
-      << newBroadcastInitOp << "\n";
-    // create new broadcast op with updated dimensions
-    auto newBroadcastOp = rewriter.create<BroadcastOp>(
-      broadcastOp.getLoc(), broadcastOp.getInput(), newBroadcastInitOp, broadcastDims);
-    LDBG() << "Created new broadcast op: " << newBroadcastOp << "\n";
-
 
     // create new insert slice with updated offsets and sizes
     auto newInsertOp = rewriter.create<tensor::InsertSliceOp>(
-      insertSliceOp.getLoc(), newBroadcastOp.getResult()[0], insertSliceOp.getDest(), newOffsets, 
+      insertSliceOp.getLoc(), newInsertSliceSource, insertSliceOp.getDest(), newOffsets, 
       newSizes, newStrides, newStaticOffsets, newStaticSizes, newStaticStrides);
     LDBG() << "Created new insert slice op: " << newInsertOp << "\n";
     // replace uses of insert slice with new insert slice
